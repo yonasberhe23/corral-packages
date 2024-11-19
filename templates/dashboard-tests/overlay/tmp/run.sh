@@ -5,6 +5,22 @@ set -x
 
 /tmp/configure.sh
 
+# Path to the .env file
+ENV_FILE="${HOME}/.env"
+
+# Function to update or append variables in the .env file
+update_or_append() {
+  local key="$1"
+  local value="$2"
+  if grep -q "^${key}=" "$ENV_FILE"; then
+    # Update the existing variable
+    sed -i.bak "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+  else
+    # Append the new variable
+    echo "${key}=${value}" >> "$ENV_FILE"
+  fi
+}
+
 function corral_set() {
     echo "corral_set $1=$2"
 }
@@ -38,11 +54,11 @@ build_image () {
     git clone -b "${dashboard_branch}" \
       "${GITHUB_URL}${CORRAL_dashboard_repo}" ${HOME}/dashboard
 
-    if [[ "${dashboard_branch}" != "master" ]]; then
-      rm -rf ${HOME}/dashboard/cypress/jenkins
-      curl https://codeload.github.com/rancher/dashboard/tar.gz/master |  tar -xz --strip=2 dashboard-master/cypress/jenkins
-      mv ${HOME}/jenkins ${HOME}/dashboard/cypress/
-    fi
+    # if [[ "${dashboard_branch}" != "master" ]]; then
+    #   rm -rf ${HOME}/dashboard/cypress/jenkins
+    #   curl https://codeload.github.com/rancher/dashboard/tar.gz/master |  tar -xz --strip=2 dashboard-master/cypress/jenkins
+    #   mv ${HOME}/jenkins ${HOME}/dashboard/cypress/
+    # fi
 
     shopt -s nocasematch
     if [[ "${CORRAL_create_initial_clusters}" == "no" ]]; then
@@ -174,9 +190,11 @@ if [ ${CORRAL_rancher_type} = "existing" ]; then
 
     TEST_BASE_URL="https://${CORRAL_rancher_host}/dashboard"
 
-    echo "Custom key: $CORRAL_custom_node_key"
+    # Update or append variables
+    update_or_append "CUSTOM_NODE_IP" "${CORRAL_custom_node_ip}"
+    update_or_append "CUSTOM_NODE_KEY" "${CORRAL_custom_node_key}"
      
-    docker run --name "${CORRAL_rancher_host}" --env-file ${HOME}/.env -t \
+    docker run --name "${CORRAL_rancher_host}" --env-file "$ENV_FILE" -t \
       -v "${HOME}":/e2e \
       -w /e2e dashboard-test
 
@@ -188,17 +206,20 @@ elif  [ ${CORRAL_rancher_type} = "recurring" ]; then
     build_image ${branch_from_rancher}
     TEST_BASE_URL="https://${CORRAL_rancher_host}/dashboard"
 
+    # Update or append variables
+    update_or_append "CUSTOM_NODE_IP" "${CORRAL_custom_node_ip}"
+    update_or_append "CUSTOM_NODE_KEY" "${CORRAL_custom_node_key}"
+
     rancher_username="${CORRAL_rancher_username}"
 
     case "${CORRAL_cypress_tags}" in
         *"@standardUser"* )
-            sed -i.bak '/TEST_USERNAME/d' ${HOME}/.env
-            echo TEST_USERNAME="standard_user" >> .env
-            cat ${HOME}/.env
+            update_or_append "TEST_USERNAME" "standard_user"
+            cat "$ENV_FILE"
             ;;
     esac
 
-    docker run --name "${CORRAL_rancher_host}" --env-file ${HOME}/.env -t \
+    docker run --name "${CORRAL_rancher_host}" --env-file "$ENV_FILE" -t \
       -v "${HOME}":/e2e \
       -w /e2e dashboard-test
 
@@ -222,7 +243,7 @@ elif [ ${CORRAL_rancher_type} = "local" ]; then
       -e CATTLE_BOOTSTRAP_PASSWORD=password \
       -e CATTLE_UI_OFFLINE_PREFERRED=true \
       -e CATTLE_PASSWORD_MIN_LENGTH=3 \
-      --name="${RANCHER_CONTAINER_NAME}" --restart=unless-stopped "rancher/rancher:${CORRAL_rancher_version}"
+      --name="${RANCHER_CONTAINER_NAME}" --restart=unless-stopped "rancher/rancher:v${CORRAL_rancher_version}"
 
     RANCHER_CONTAINER_IP_FROM_HOST=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' rancher)
     RANCHER_CONTAINER_URL="https://${RANCHER_CONTAINER_IP_FROM_HOST}/dashboard/"
@@ -260,16 +281,14 @@ elif [ ${CORRAL_rancher_type} = "local" ]; then
 
     rancher_init ${RANCHER_CONTAINER_IP} ${INSTANCE_IP} ${TEST_PASSWORD}
 
-    docker run --network container:rancher --name "${CYPRESS_CONTAINER_NAME}" -t \
-      -e CYPRESS_VIDEO=false \
-      -e CYPRESS_VIEWPORT_WIDTH="${VIEWPORT_WIDTH}" \
-      -e CYPRESS_VIEWPORT_HEIGHT="${VIEWPORT_HEIGHT}" \
-      -e TEST_BASE_URL=${TEST_BASE_URL} \
-      -e TEST_USERNAME=${TEST_USERNAME} \
-      -e TEST_PASSWORD=${TEST_PASSWORD} \
-      -e TEST_SKIP_SETUP=true \
-      -e TEST_SKIP=setup \
-      -e CATTLE_BOOTSTRAP_PASSWORD=${TEST_PASSWORD} \
+    # Update or append variables
+    update_or_append "TEST_PASSWORD" "${TEST_PASSWORD}"
+    update_or_append "TEST_BASE_URL" "${TEST_BASE_URL}"
+    update_or_append "CATTLE_BOOTSTRAP_PASSWORD" "${TEST_PASSWORD}"
+
+    cat "$ENV_FILE"
+
+    docker run --network container:rancher --name "${CYPRESS_CONTAINER_NAME}" --env-file "$ENV_FILE" -t \
       -v "${HOME}":/e2e \
       -w /e2e dashboard-test
     
