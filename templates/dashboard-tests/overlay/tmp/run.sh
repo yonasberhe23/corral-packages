@@ -38,11 +38,11 @@ build_image () {
     git clone -b "${dashboard_branch}" \
       "${GITHUB_URL}${CORRAL_dashboard_repo}" ${HOME}/dashboard
 
-    if [[ "${dashboard_branch}" != "master" ]]; then
-      rm -rf ${HOME}/dashboard/cypress/jenkins
-      curl https://codeload.github.com/rancher/dashboard/tar.gz/master |  tar -xz --strip=2 dashboard-master/cypress/jenkins
-      mv ${HOME}/jenkins ${HOME}/dashboard/cypress/
-    fi
+    # if [[ "${dashboard_branch}" != "master" ]]; then
+    #   rm -rf ${HOME}/dashboard/cypress/jenkins
+    #   curl https://codeload.github.com/rancher/dashboard/tar.gz/master |  tar -xz --strip=2 dashboard-master/cypress/jenkins
+    #   mv ${HOME}/jenkins ${HOME}/dashboard/cypress/
+    # fi
 
     shopt -s nocasematch
     if [[ "${CORRAL_create_initial_clusters}" == "no" ]]; then
