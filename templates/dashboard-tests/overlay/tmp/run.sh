@@ -35,14 +35,20 @@ exit_code=0
 
 build_image () {
     dashboard_branch=$1
+
+    # Get dashboard branch based on the rancher image tag
+    if [[ "${CORRAL_rancher_image_tag}" == "head" ]]; then
+        dashboard_branch="master"
+    elif [[ "${CORRAL_rancher_image_tag}" =~ ^v([0-9]+\.[0-9]+)-head$ ]]; then
+        # Extract version number from the rancher image tag (e.g., v2.12-head -> 2.12)
+        version_number="${BASH_REMATCH[1]}"
+        dashboard_branch="release-${version_number}"
+    fi
+
+    echo "Using dashboard_branch: $dashboard_branch"
+    
     git clone -b "${dashboard_branch}" \
       "${GITHUB_URL}${CORRAL_dashboard_repo}" ${HOME}/dashboard
-
-    if [[ "${dashboard_branch}" != "master" ]]; then
-      rm -rf ${HOME}/dashboard/cypress/jenkins
-      curl https://codeload.github.com/rancher/dashboard/tar.gz/master |  tar -xz --strip=2 dashboard-master/cypress/jenkins
-      mv ${HOME}/jenkins ${HOME}/dashboard/cypress/
-    fi
 
     shopt -s nocasematch
     if [[ "${CORRAL_create_initial_clusters}" == "no" ]]; then
